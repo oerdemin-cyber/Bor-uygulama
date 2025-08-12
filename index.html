@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="tr" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Borç & Bütçe — PWA + GPT</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b0d12">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{ --bg:#0b0d12; --card:#121621; --elev:#171c2a; --text:#e6ebf3; --muted:#a9b3c7;
+  --line:#262d3d; --brand:#7cc4ff; --brand2:#b09cff; --danger:#ff6b6b; --ok:#70e0a6;
+  --radius:16px; --shadow:0 8px 24px rgba(0,0,0,.28); }
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+body{font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; background:var(--bg); color:var(--text); line-height:1.6}
+.container{max-width:1100px; margin:0 auto; padding:24px}
+.topbar{position:sticky; top:0; z-index:10; display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; border-bottom:1px solid var(--line); background:rgba(11,13,18,.6); backdrop-filter: blur(6px)}
+.brand{display:flex; align-items:center; gap:12px}
+.logo{width:36px;height:36px; display:grid; place-items:center; font-weight:800; border-radius:10px;
+  background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#0b0d12}
+.title{display:flex; flex-direction:column; line-height:1.2}
+.title strong{font-size:18px} .title span{font-size:12px; color:var(--muted)}
+.actions{display:flex; gap:6px; align-items:center}
+button{border:none; background:transparent; color:var(--text); cursor:pointer; padding:10px 14px; border-radius:12px; border:1px solid var(--line); background:var(--elev)}
+button.primary{background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#0b0d12; font-weight:700; border:none}
+button.small{padding:6px 10px; font-size:14px}
+.overview{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; padding:18px 0}
+.kpi{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow)}
+.kpi-label{display:block; color:var(--muted); font-size:12px} .kpi-value{font-size:22px; font-weight:800; letter-spacing:.3px}
+.panel{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); margin:18px 0}
+.panel-head{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--line)}
+.panel-body{padding:18px} .panel-actions{display:flex; gap:8px; align-items:center}
+.grid.two{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+.field{display:flex; flex-direction:column; gap:6px; margin:0 0 12px}
+.field input,.field select,.field textarea{padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:var(--elev); color:var(--text)}
+.muted{color:var(--muted)} .small{font-size:12px}
+.table-wrap{overflow:auto} .table{width:100%; border-collapse:collapse; font-size:14px}
+.table th,.table td{padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap}
+.table tfoot td{font-weight:700}
+.footer{display:flex; gap:10px; justify-content:center; align-items:center; padding:28px; color:var(--muted)}
+.accordion{display:grid; gap:10px; padding:18px}
+.accordion-item{border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--elev)}
+.accordion-trigger{width:100%; text-align:left; padding:14px 16px; display:flex; justify-content:space-between; align-items:center}
+.accordion-panel{padding:10px 16px 16px} .bank-actions{display:flex; gap:8px; padding:6px 0}
+dialog::backdrop{background:rgba(0,0,0,.45)} dialog{border:none; padding:0; background:transparent}
+.modal{min-width:min(560px,92vw); background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow)}
+.modal-head,.modal-foot{display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--line)}
+.modal-foot{border-top:1px solid var(--line); border-bottom:none} .modal-body{padding:16px}
+.badge{display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; border:1px dashed var(--line); color:var(--muted); font-size:12px}
+.chart svg{display:block}
+@media (max-width:900px){ .overview{grid-template-columns:1fr 1fr} .grid.two{grid-template-columns:1fr} }
+#aiBox{margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:12px}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">₺</div>
+    <div class="title"><strong>Borç & Bütçe</strong><span>PWA • GPT önerili</span></div>
+  </div>
+  <nav class="actions">
+    <button id="aiBtn" class="primary">✨ GPT Önerisi</button>
+    <button id="settingsBtn">Ayarlar</button>
+    <button id="exportBtn">Dışa Aktar</button>
+    <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
+      <input id="importFile" type="file" accept="application/json" hidden> İçe Aktar
+    </label>
+    <button id="resetBtn" class="danger">Sıfırla</button>
+  </nav>
+</header>
+
+<main class="container">
+  <div id="aiBox" class="small muted">GPT önerisi burada görünecek.</div>
+
+  <section class="overview">
+    <div class="kpi"><span class="kpi-label">Toplam Borç</span><span class="kpi-value" id="kpiTotalDebt">₺0</span></div>
+    <div class="kpi"><span class="kpi-label">Aylık Ödeme</span><span class="kpi-value" id="kpiMonthlyPayment">₺0</span></div>
+    <div class="kpi"><span class="kpi-label">Bir Sonraki Son Gün</span><span class="kpi-value" id="kpiNextDue">—</span></div>
+    <div class="kpi"><span class="kpi-label">Harcama (bu ay)</span><span class="kpi-value" id="kpiMonthSpend">₺0</span></div>
+  </section>
+
+  <section class="panel">
+    <header class="panel-head"><h2>Bütçe & Plan</h2></header>
+    <div class="panel-body grid two">
+      <div>
+        <label class="field"><span>Aylık serbest bütçe (borç kapatma için)</span><input type="number" id="freeBudget" min="0" step="100" value="0" inputmode="decimal"></label>
+        <label class="field"><span>Strateji</span>
+          <select id="strategy">
+            <option value="snowball">Kartopu</option>
+            <option value="avalanche">Çığ</option>
+          </select>
+        </label>
+        <button id="simulateBtn" class="primary">Ödeme Planı Simüle Et</button>
+        <p class="muted">Simülasyon, mevcut aylık taksitlere ek “serbest bütçe”yi seçili stratejiye göre dağıtır.</p>
+      </div>
+      <div><div class="sim-output" id="simOutput" aria-live="polite"></div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <header class="panel-head">
+      <h2>Bankalar & Borçlar</h2>
+      <div class="panel-actions"><button id="addBankBtn" class="primary">Banka Ekle</button></div>
+    </header>
+    <div id="banksList" class="accordion"></div>
+  </section>
+
+  <section class="panel">
+    <header class="panel-head">
+      <h2>Harcamalar</h2>
+      <div class="panel-actions"><button id="addExpenseBtn" class="primary">Harcama Ekle</button></div>
+    </header>
+    <div class="table-wrap">
+      <table class="table" id="expensesTable">
+        <thead><tr><th>Tarih</th><th>Kategori</th><th>Tutar</th><th>Not</th><th></th></tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td colspan="2">Bu ay toplam</td><td id="expensesMonthTotal">₺0</td><td colspan="2"></td></tr></tfoot>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <span>© <span id="year"></span> Borç & Bütçe</span><span class="small muted">• PWA — offline çalışır • Ana ekrana ekleyin</span>
+</footer>
+
+<dialog id="modal">
+  <form method="dialog" class="modal">
+    <header class="modal-head"><h3 id="modalTitle">Ayarlar</h3><button value="cancel" aria-label="Kapat">✕</button></header>
+    <div class="modal-body" id="modalBody">
+      <label class="field"><span>OpenAI API Key</span><input id="apiKey" type="password" placeholder="sk-..." autocomplete="off"></label>
+      <p class="small muted">Anahtar cihazında LocalStorage'da tutulur ve sadece OpenAI'ye istek atmak için kullanılır.</p>
+    </div>
+    <footer class="modal-foot"><button value="cancel">Vazgeç</button><button id="modalSubmit" class="primary" value="submit">Kaydet</button></footer>
+  </form>
+</dialog>
+
+<template id="bankTemplate">
+  <div class="accordion-item">
+    <button class="accordion-trigger" aria-expanded="false">
+      <span class="bank-name"></span>
+      <span class="muted small bank-summary"></span>
+    </button>
+    <div class="accordion-panel" hidden>
+      <div class="bank-actions">
+        <button class="small edit-bank">Bankayı Düzenle</button>
+        <button class="small danger delete-bank">Sil</button>
+        <button class="small primary add-debt">Borç Ekle</button>
+      </div>
+      <div class="table-wrap">
+        <table class="table debts-table">
+          <thead><tr><th>Ad</th><th>Kalan Bakiye</th><th>Faiz (%)</th><th>Aylık Taksit</th><th>Son Gün</th><th></th></tr></thead>
+          <tbody></tbody>
+          <tfoot><tr><td>Toplam</td><td class="sum-balance">₺0</td><td></td><td class="sum-monthly">₺0</td><td></td><td></td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+// ===== Core app (kısaltılmış) =====
+const $ = (s, el=document)=> el.querySelector(s);
+const fmt = new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0});
+const todayStr = ()=> new Date().toISOString().slice(0,10);
+const store = {
+  key:'bb_data_v1',
+  read(){ try{ return JSON.parse(localStorage.getItem(this.key))||{banks:[],expenses:[],prefs:{theme:'auto'},apiKey:''} }catch{ return {banks:[],expenses:[],prefs:{theme:'auto'},apiKey:''} } },
+  write(d){ localStorage.setItem(this.key, JSON.stringify(d)) },
+  reset(){ localStorage.removeItem(this.key) }
+};
+let state = store.read();
+$('#year').textContent = new Date().getFullYear();
+
+// ===== Settings modal (API key) =====
+const modal = $('#modal'), modalTitle=$('#modalTitle'), modalBody=$('#modalBody'), modalSubmit=$('#modalSubmit');
+let modalHandler=null;
+function openSettings(){
+  $('#apiKey', modalBody).value = state.apiKey || '';
+  modal.showModal();
+  modalHandler = ()=>{
+    state.apiKey = $('#apiKey', modalBody).value.trim();
+    store.write(state);
+  };
+}
+$('#settingsBtn').addEventListener('click', openSettings);
+modal.addEventListener('close', ()=> modalHandler=null);
+modalSubmit.addEventListener('click', (e)=>{ e.preventDefault(); if(modalHandler){ modalHandler(); modal.close(); } else modal.close(); });
+
+// ===== Export / Import / Reset =====
+$('#exportBtn').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'borc-butce-'+todayStr()+'.json'; a.click();
+});
+$('#importFile').addEventListener('change', (e)=>{
+  const f = e.target.files?.[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{ try{ const obj = JSON.parse(r.result); if(!obj.banks||!obj.expenses) throw new Error('Geçersiz veri'); state={...state, ...obj}; store.write(state); renderAll(); alert('İçe aktarıldı'); } catch(err){ alert('Hata: '+err.message) } };
+  r.readAsText(f);
+});
+$('#resetBtn').addEventListener('click', ()=>{ if(confirm('Tüm veriler silinsin mi?')){ store.reset(); state=store.read(); renderAll(); }});
+
+// ===== Banks/Expenses (same as before, condensed) =====
+function addBank(b){ state.banks.push({id:crypto.randomUUID(), name:b.name, notes:b.notes||'', debts:[]}); store.write(state); renderBanks(); }
+function updateBank(id, patch){ const bk = state.banks.find(x=>x.id===id); if(!bk) return; Object.assign(bk, patch); store.write(state); renderBanks(); }
+function deleteBank(id){ state.banks = state.banks.filter(x=>x.id!==id); store.write(state); renderBanks(); }
+function addDebt(bankId,d){ const b=state.banks.find(x=>x.id===bankId); if(!b) return; b.debts.push({id:crypto.randomUUID(), name:d.name, balance:+d.balance||0, rate:+d.rate||0, monthly:+d.monthly||0, dueDay:+d.dueDay||1}); store.write(state); renderBanks(); }
+function updateDebt(bankId,debtId,patch){ const b=state.banks.find(x=>x.id===bankId); if(!b) return; const d=b.debts.find(x=>x.id===debtId); if(!d) return; Object.assign(d,{name:patch.name??d.name, balance:patch.balance!=null?+patch.balance:d.balance, rate:patch.rate!=null?+patch.rate:d.rate, monthly:patch.monthly!=null?+patch.monthly:d.monthly, dueDay:patch.dueDay!=null?+patch.dueDay:d.dueDay}); store.write(state); renderBanks(); }
+function deleteDebt(bankId,debtId){ const b=state.banks.find(x=>x.id===bankId); if(!b) return; b.debts = b.debts.filter(x=>x.id!==debtId); store.write(state); renderBanks(); }
+function addExpense(ex){ state.expenses.push({id:crypto.randomUUID(), date:ex.date||todayStr(), category:ex.category||'Genel', amount:+ex.amount||0, note:ex.note||''}); store.write(state); renderExpenses(); }
+function updateExpense(id,patch){ const e=state.expenses.find(x=>x.id===id); if(!e) return; Object.assign(e,{date:patch.date??e.date, category:patch.category??e.category, amount:patch.amount!=null?+patch.amount:e.amount, note:patch.note??e.note}); store.write(state); renderExpenses(); }
+function deleteExpense(id){ state.expenses = state.expenses.filter(x=>x.id!==id); store.write(state); renderExpenses(); }
+
+function escapeHTML(s=''){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function renderBanks(){
+  const list = $('#banksList'); list.innerHTML='';
+  const tpl = $('#bankTemplate');
+  state.banks.forEach(bank=>{
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    const trigger = node.querySelector('.accordion-trigger');
+    const panel = node.querySelector('.accordion-panel');
+    node.querySelector('.bank-name').textContent = bank.name;
+    const sums = (bank.debts||[]).reduce((a,d)=>({sumBal:a.sumBal+(+d.balance||0), sumMo:a.sumMo+(+d.monthly||0)}),{sumBal:0,sumMo:0});
+    node.querySelector('.bank-summary').textContent = fmt.format(sums.sumBal)+' • Aylık '+fmt.format(sums.sumMo);
+    trigger.addEventListener('click', ()=>{ const ex = trigger.getAttribute('aria-expanded')==='true'; trigger.setAttribute('aria-expanded', String(!ex)); panel.hidden = ex; });
+    node.querySelector('.edit-bank').addEventListener('click', ()=> openBankModal(bank));
+    node.querySelector('.delete-bank').addEventListener('click', ()=>{ if(confirm('Bankayı ve tüm borçlarını sil?')) deleteBank(bank.id); });
+    node.querySelector('.add-debt').addEventListener('click', ()=> openDebtModal(bank.id));
+    const tbody = node.querySelector('tbody');
+    (bank.debts||[]).forEach(d=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHTML(d.name)}</td><td>${fmt.format(d.balance)}</td><td>${(+d.rate||0).toLocaleString('tr-TR',{maximumFractionDigits:2})}</td><td>${fmt.format(d.monthly)}</td><td>${d.dueDay||'-'}</td>
+      <td><button class="small" data-act="e">Düzenle</button> <button class="small danger" data-act="d">Sil</button></td>`;
+      tr.querySelector('[data-act="e"]').addEventListener('click', ()=> openDebtModal(bank.id,d));
+      tr.querySelector('[data-act="d"]').addEventListener('click', ()=>{ if(confirm('Bu borç silinsin mi?')) deleteDebt(bank.id,d.id); });
+      tbody.appendChild(tr);
+    });
+    node.querySelector('.sum-balance').textContent = fmt.format(sums.sumBal);
+    node.querySelector('.sum-monthly').textContent = fmt.format(sums.sumMo);
+    list.appendChild(node);
+  });
+  const totals = allTotals();
+  $('#kpiTotalDebt').textContent = fmt.format(totals.totalDebt);
+  $('#kpiMonthlyPayment').textContent = fmt.format(totals.totalMonthly);
+  $('#kpiNextDue').textContent = totals.nextDueDay ? `Ayın ${totals.nextDueDay}. günü` : '—';
+}
+function allTotals(){
+  let totalDebt=0,totalMonthly=0,nextDue=null;
+  (state.banks||[]).forEach(b=> (b.debts||[]).forEach(d=>{
+    totalDebt += +d.balance||0; totalMonthly += +d.monthly||0;
+    if(d.dueDay){ if(nextDue==null || d.dueDay < nextDue) nextDue = d.dueDay; }
+  }));
+  const ym = new Date().toISOString().slice(0,7);
+  const monthSpend = (state.expenses||[]).filter(e=> (e.date||'').startsWith(ym)).reduce((s,e)=> s + (+e.amount||0), 0);
+  $('#kpiMonthSpend').textContent = fmt.format(monthSpend);
+  return {totalDebt,totalMonthly,nextDueDay:nextDue,monthSpend};
+}
+
+function openBankModal(bank){
+  const edit = !!bank;
+  modalTitle.textContent = edit?'Bankayı Düzenle':'Banka Ekle';
+  modalBody.innerHTML = `
+    <label class="field"><span>Banka adı</span><input type="text" id="bankName" required value="${escapeHTML(bank?.name||'')}"></label>
+    <label class="field"><span>Not (isteğe bağlı)</span><textarea id="bankNotes" rows="3">${escapeHTML(bank?.notes||'')}</textarea></label>
+  `;
+  modal.showModal();
+  modalHandler = ()=>{
+    const name = document.getElementById('bankName').value.trim();
+    const notes = document.getElementById('bankNotes').value.trim();
+    if(!name){ alert('Banka adı zorunludur.'); return false; }
+    edit ? updateBank(bank.id,{name,notes}) : addBank({name,notes});
+  };
+}
+function openDebtModal(bankId,debt){
+  const edit = !!debt;
+  modalTitle.textContent = edit?'Borcu Düzenle':'Borç Ekle';
+  modalBody.innerHTML = `
+    <div class="grid two">
+      <label class="field"><span>Ad</span><input type="text" id="dName" required value="${escapeHTML(debt?.name||'')}"></label>
+      <label class="field"><span>Kalan Bakiye (₺)</span><input type="number" id="dBalance" min="0" step="100" value="${debt?.balance??0}"></label>
+    </div>
+    <div class="grid two">
+      <label class="field"><span>Faiz (yıllık, %)</span><input type="number" id="dRate" min="0" step="0.01" value="${debt?.rate??0}"></label>
+      <label class="field"><span>Aylık Taksit (₺)</span><input type="number" id="dMonthly" min="0" step="100" value="${debt?.monthly??0}"></label>
+    </div>
+    <label class="field"><span>Son Ödeme Günü (1–31)</span><input type="number" id="dDueDay" min="1" max="31" step="1" value="${debt?.dueDay??1}"></label>
+  `;
+  modal.showModal();
+  modalHandler = ()=>{
+    const name=document.getElementById('dName').value.trim();
+    const balance=+document.getElementById('dBalance').value;
+    const rate=+document.getElementById('dRate').value;
+    const monthly=+document.getElementById('dMonthly').value;
+    const dueDay=+document.getElementById('dDueDay').value;
+    if(!name){ alert('Ad zorunlu.'); return false; }
+    if(isNaN(balance)||isNaN(rate)||isNaN(monthly)){ alert('Sayı alanlarını kontrol edin.'); return false; }
+    edit ? updateDebt(bankId, debt.id, {name,balance,rate,monthly,dueDay}) : addDebt(bankId,{name,balance,rate,monthly,dueDay});
+  };
+}
+modal.addEventListener('close', ()=> modalHandler=null);
+modalSubmit.addEventListener('click', (e)=>{ e.preventDefault(); if(modalHandler){ const ok = modalHandler(); if(ok!==false) modal.close(); } else modal.close(); });
+
+function renderExpenses(){
+  const tbody = $('#expensesTable tbody'); tbody.innerHTML='';
+  const month = new Date().toISOString().slice(0,7);
+  let total=0;
+  (state.expenses||[]).sort((a,b)=> a.date.localeCompare(b.date)).forEach(ex=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${ex.date}</td><td>${escapeHTML(ex.category||'')}</td><td>${fmt.format(ex.amount||0)}</td><td>${escapeHTML(ex.note||'')}</td>
+      <td><button class="small" data-e="1">Düzenle</button> <button class="small danger" data-d="1">Sil</button></td>`;
+    tr.querySelector('[data-e]').addEventListener('click', ()=> openExpenseModal(ex));
+    tr.querySelector('[data-d]').addEventListener('click', ()=>{ if(confirm('Silinsin mi?')) deleteExpense(ex.id); });
+    tbody.appendChild(tr);
+    if(ex.date.startsWith(month)) total += +ex.amount||0;
+  });
+  document.getElementById('expensesMonthTotal').textContent = fmt.format(total);
+  document.getElementById('kpiMonthSpend').textContent = fmt.format(total);
+}
+function openExpenseModal(ex){
+  const edit = !!ex;
+  modalTitle.textContent = edit?'Harcamayı Düzenle':'Harcama Ekle';
+  modalBody.innerHTML = `
+    <div class="grid two">
+      <label class="field"><span>Tarih</span><input type="date" id="eDate" value="${ex?.date||todayStr()}"></label>
+      <label class="field"><span>Kategori</span><input type="text" id="eCategory" value="${escapeHTML(ex?.category||'Genel')}"></label>
+    </div>
+    <label class="field"><span>Tutar (₺)</span><input type="number" id="eAmount" min="0" step="10" value="${ex?.amount??0}"></label>
+    <label class="field"><span>Not</span><textarea id="eNote" rows="3">${escapeHTML(ex?.note||'')}</textarea></label>
+  `;
+  modal.showModal();
+  modalHandler = ()=>{
+    const date=document.getElementById('eDate').value||todayStr();
+    const category=document.getElementById('eCategory').value.trim()||'Genel';
+    const amount=+document.getElementById('eAmount').value;
+    const note=document.getElementById('eNote').value.trim();
+    if(isNaN(amount)){ alert('Tutar geçersiz.'); return false; }
+    edit ? updateExpense(ex.id,{date,category,amount,note}) : addExpense({date,category,amount,note});
+  };
+}
+
+// ===== Simulation & chart =====
+function simulate(){
+  const free = +($('#freeBudget').value)||0;
+  const strategy = $('#strategy').value;
+  const debts = (state.banks||[]).flatMap(b=> (b.debts||[]).map(d=>({...d, bank:b.name})));
+  if(debts.length===0){ $('#simOutput').innerHTML='<p class="muted">Simüle edilecek borç yok.</p>'; return; }
+  debts.forEach(d=> d.mr = (+d.rate||0)/100/12);
+  const order = ()=> strategy==='snowball' ? debts.sort((a,b)=>(a.balance||0)-(b.balance||0)) : debts.sort((a,b)=>(b.rate||0)-(a.rate||0));
+  order();
+  let month=0, plan=[], safe=600;
+  while(debts.some(d=>d.balance>0.5) && month<safe){
+    month++; let extra = free;
+    debts.forEach(d=>{ d.balance += d.balance*d.mr; const min = Math.min(d.monthly||0, d.balance); if(min>0) d.balance -= min; });
+    order();
+    for(const d of debts){ if(extra<=0) break; if(d.balance<=0.5) continue; const pay=Math.min(extra,d.balance); d.balance-=pay; extra-=pay; }
+    const totalLeft = debts.reduce((s,d)=> s + Math.max(d.balance,0), 0);
+    plan.push({month,totalLeft});
+  }
+  const end = addMonths(new Date(), plan.length);
+  $('#simOutput').innerHTML = `<div class="badge">Strateji: <strong>${strategy==='snowball'?'Kartopu':'Çığ'}</strong></div>
+    <p><strong>${plan.length} ay</strong> içinde (yaklaşık ${end.toLocaleDateString('tr-TR')}) borçsuz olabilirsiniz (varsayımlar ile).</p>
+    <div class="chart" id="chart" role="img" aria-label="Toplam borcun aylara göre azalımı"></div>`;
+  renderSparkline($('#chart'), plan.map(p=>p.totalLeft));
+}
+function addMonths(d, m){ const x=new Date(d); x.setMonth(x.getMonth()+m); return x; }
+function renderSparkline(el,data){
+  const w = el.clientWidth || 420, h = 120;
+  const max = Math.max(...data), min = Math.min(...data);
+  const norm = v => h - ((v-min)/(max-min||1))*h;
+  const pts = data.map((v,i)=> `${(i/(data.length-1||1))*w},${norm(v)}`).join(' ');
+  el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}"><polyline fill="none" stroke="currentColor" stroke-width="2" points="${pts}"/></svg>`;
+}
+document.getElementById('simulateBtn').addEventListener('click', simulate);
+document.getElementById('addBankBtn').addEventListener('click', ()=> openBankModal());
+document.getElementById('addExpenseBtn').addEventListener('click', ()=> openExpenseModal());
+function renderAll(){ renderBanks(); renderExpenses(); const t = allTotals(); document.getElementById('kpiMonthSpend').textContent = fmt.format(t.monthSpend||0); }
+renderAll();
+
+// ===== GPT Önerisi =====
+function getSnapshot(){
+  const {totalDebt,totalMonthly,nextDueDay,monthSpend} = allTotals();
+  return { totalDebt, totalMonthly, nextDueDay, monthSpend, banks: state.banks||[], expenses: state.expenses||[] };
+}
+async function aiSuggest(){
+  const key = (state.apiKey||'').trim();
+  const box = document.getElementById('aiBox');
+  if(!key){ box.textContent = "Önce Ayarlar'dan OpenAI API anahtarını girin (sk-...)."; return; }
+  box.textContent = "Analiz ediliyor…";
+  const s = getSnapshot();
+  const prompt = [
+    "Aşağıdaki özet kişisel finans panelinden:",
+    `- Toplam kalan borç: ${Math.round(s.totalDebt)} TL`,
+    `- Aylık taksit toplamı: ${Math.round(s.totalMonthly)} TL`,
+    `- Bu ay harcama: ${Math.round(s.monthSpend)} TL`,
+    `- En yakın son ödeme günü: ${s.nextDueDay || "-"}`,
+    "Hedef: faiz maliyetini düşürmek ve nakit akışını rahatlatmak.",
+    "",
+    "Türkçe, 5 maddelik, uygulanabilir ve net bir “bu ay” eylem planı yaz.",
+    "Öncelik sırası: (1) gecikme riskini azalt, (2) maliyeti yüksek borçları hedefle (avalanche),",
+    "(3) en az bir kolay kazanım öner, (4) opsiyonel: tasarruf/gelir artışı fikri, (5) risk uyarısı."
+  ].join("\n");
+
+  try{
+    const res = await fetch("https://api.openai.com/v1/chat/completions",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":"Bearer "+key
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {role:"system", content:"Kısa, somut, uygulanabilir Türkçe finans önerileri ver."},
+          {role:"user", content: prompt}
+        ],
+        temperature: 0.7
+      })
+    });
+    if(!res.ok){
+      const t = await res.text();
+      box.textContent = "Hata: "+t;
+      return;
+    }
+    const data = await res.json();
+    const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "—";
+    box.textContent = text;
+  }catch(err){
+    box.textContent = "Ağ hatası: "+err;
+  }
+}
+document.getElementById('aiBtn').addEventListener('click', aiSuggest);
+
+// ===== Service worker register =====
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js"); });
+}
+</script>
+</body>
+</html>
